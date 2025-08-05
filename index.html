@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flappy EthOS</title>
+    <style>
+        body {
+            background-image: url('1080x360.jpeg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            position: relative;
+        }
+        #game-container {
+            position: relative;
+        }
+        #gameCanvas {
+            background-color: rgba(25, 25, 55, 0.9);
+            border: 2px solid #333;
+            position: relative;
+        }
+        #startMessage {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #87CEEB; /* Sky Blue */
+            text-align: center;
+            cursor: pointer;
+            z-index: 100;
+        }
+        #gameOverMessage {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 22px;
+            color: red; /* Changed to Red */
+            font-weight: bold; /* Added bold font */
+            text-align: center;
+            line-height: 1.5;
+            display: none;
+            z-index: 100;
+            width: 80%;
+        }
+        #gameOverMessage a {
+            color: #00FFFF; /* Link color changed to bright cyan */
+            text-decoration: none;
+        }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            color: #87CEEB; /* Sky Blue */
+            z-index: 100;
+        }
+        #shareButton {
+            position: absolute;
+            top: 75%; /* Lowered position */
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+            z-index: 100;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #1DA1F2;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="startMessage">Click or Press Space to Start Mining</div>
+        <div id="gameOverMessage"></div>
+        <div id="score">Blocks: 0</div>
+        <button id="shareButton">Share on X</button>
+    </div>
+
+    <script>
+        const birdImage = new Image();
+        birdImage.src = 'generated-image.jpg';
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const bird = {
+            x: 50,
+            y: 150,
+            width: 34,
+            height: 24,
+            gravity: 0.16, /* Increased initial gravity */
+            velocity: 0,
+            jump: -4, /* Adjusted jump for new gravity */
+        };
+
+        const pipes = [];
+        const pipeGap = 150; // Reverted pipe gap to original value
+        const pipeWidth = 50;
+        let frame = 0;
+        let score = 0;
+        let gameRunning = false;
+        let pipeSpeed = 1.6; // Doubled pipe speed
+        const difficultyIncreaseRate = 0.005; 
+
+
+        const gameOverMessages = [
+            "Transaction failed. This game is harder than getting a code. Can you help a player out? <a href='https://x.com/stfuaarohi' target='_blank'>@stfuaarohi</a>",
+            "This game is harder than getting an airdrop! Paper hands everywhere. Maybe @ethereum_OS has a code for a dedicated miner?",
+            "You were almost there! Just like that airdrop code. The struggle is real. @ethereum_OS, can you help a fellow miner?",
+            "Your wallet has been rugged! Just kidding. But seriously, this game is tough. I'm hoping my dedication gets noticed by @ethereum_OS."
+        ];
+
+        function drawBird() {
+            ctx.drawImage(birdImage, bird.x, bird.y, bird.width, bird.height);
+        }
+
+        function drawPipes() {
+            pipes.forEach(pipe => {
+                const color = pipe.isGreen ? '#28a745' : '#dc3545';
+                
+                // Top pipe
+                ctx.fillStyle = color;
+                ctx.fillRect(pipe.x, 0, pipeWidth, pipe.topHeight);
+                ctx.fillRect(pipe.x, pipe.topHeight + pipeGap, pipeWidth, canvas.height - (pipe.topHeight + pipeGap));
+
+                // Drawing candlestick lines
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(pipe.x + pipeWidth / 2, 0);
+                ctx.lineTo(pipe.x + pipeWidth / 2, pipe.topHeight);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(pipe.x + pipeWidth / 2, pipe.topHeight + pipeGap);
+                ctx.lineTo(pipe.x + pipeWidth / 2, canvas.height);
+                ctx.stroke();
+            });
+        }
+
+        function update() {
+            if (!gameRunning) return;
+
+            // Update bird
+            bird.velocity += bird.gravity;
+            bird.y += bird.velocity;
+
+            // Check for collision with top/bottom
+            if (bird.y + bird.height > canvas.height || bird.y < 0) {
+                endGame();
+            }
+
+            // Generate new pipes (adjusted for new speed)
+            if (frame % 120 === 0) {
+                const topHeight = Math.random() * (canvas.height - pipeGap - 50) + 20;
+                const isGreen = Math.random() > 0.5;
+                pipes.push({
+                    x: canvas.width,
+                    topHeight: topHeight,
+                    isGreen: isGreen,
+                    passed: false
+                });
+            }
+
+            // Update pipes
+            pipes.forEach(pipe => {
+                pipe.x -= pipeSpeed; // Use the dynamic pipe speed
+
+                // Check for collision with pipes
+                if (
+                    bird.x + bird.width > pipe.x &&
+                    bird.x < pipe.x + pipeWidth &&
+                    (bird.y < pipe.topHeight || bird.y + bird.height > pipe.topHeight + pipeGap)
+                ) {
+                    endGame();
+                }
+
+                // Check for score
+                if (!pipe.passed && bird.x > pipe.x + pipeWidth) {
+                    score++;
+                    pipe.passed = true;
+                    document.getElementById('score').innerText = 'Blocks: ' + score;
+                    // Gradually increase gravity to make the game harder
+                    bird.gravity += difficultyIncreaseRate;
+                }
+            });
+
+            // Remove off-screen pipes
+            pipes.filter(pipe => pipe.x + pipeWidth > 0);
+
+            // Clear canvas and redraw
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawPipes();
+            drawBird();
+
+            frame++;
+            requestAnimationFrame(update);
+        }
+
+        function jump() {
+            bird.velocity = bird.jump;
+        }
+
+        function startGame() {
+            gameRunning = true;
+            bird.y = 150;
+            bird.velocity = 0;
+            pipes.length = 0;
+            score = 0;
+            frame = 0;
+            // Reset game variables for new game
+            bird.gravity = 0.16; 
+            pipeSpeed = 1.6;
+            document.getElementById('score').innerText = 'Blocks: 0';
+            document.getElementById('startMessage').style.display = 'none';
+            document.getElementById('gameOverMessage').style.display = 'none';
+            document.getElementById('shareButton').style.display = 'none';
+            update();
+        }
+
+        function endGame() {
+            gameRunning = false;
+            const message = gameOverMessages[Math.floor(Math.random() * gameOverMessages.length)];
+            document.getElementById('gameOverMessage').innerHTML = message; // Use innerHTML to render the link
+            document.getElementById('gameOverMessage').style.display = 'block';
+            document.getElementById('startMessage').innerText = 'Click or Press Space to Restart Mining';
+            document.getElementById('startMessage').style.display = 'block';
+            document.getElementById('shareButton').style.display = 'block';
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.code === 'Space' && gameRunning) {
+                jump();
+            } else if (e.code === 'Space' && !gameRunning) {
+                startGame();
+            }
+        });
+
+        canvas.addEventListener('click', () => {
+            if (gameRunning) {
+                jump();
+            } else {
+                startGame();
+            }
+        });
+
+        document.getElementById('shareButton').addEventListener('click', () => {
+            const tweetText = `Just tried out 'Flappy EthOS' by @stfuaarohi. This is awesome! The candlestick pillars are a cool touch. I got a score of ${score}. You guys should check it out and try to beat my score! @ethereum_OS #EthOS #Airdrop`;
+            const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+            window.open(tweetUrl, '_blank');
+        });
+
+    </script>
+</body>
+</html>
